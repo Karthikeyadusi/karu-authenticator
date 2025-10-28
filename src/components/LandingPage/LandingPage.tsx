@@ -148,7 +148,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   : 'border-gray-300 text-gray-700 hover:border-gray-400'
               }`}>
                 <Github className="w-5 h-5" />
-                <span>View on GitHub</span>
+                <span><a href= "https://github.com/karthikeyadusi/karu-authenticator" target = "_blank">View on GitHub</a></span>
               </button>
             </div>
           </div>
