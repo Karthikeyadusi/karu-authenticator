@@ -145,11 +145,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onShowSett
       )}
 
       {/* Header */}
-      <header className={`border-b sticky top-0 z-30 backdrop-blur-xl transition-all duration-300 ${
+      <header className={`border-b sticky top-0 z-30 backdrop-blur-xl backdrop-saturate-150 transition-all duration-300 ${
         isDark 
-          ? 'bg-gray-800/80 border-gray-700/50 shadow-lg shadow-black/10' 
-          : 'bg-white/80 border-gray-200/50 shadow-sm'
-      }`}>
+          ? 'bg-gray-800/30 border-gray-700/30 shadow-2xl shadow-black/20' 
+          : 'bg-white/30 border-gray-200/30 shadow-xl shadow-gray-900/10'
+      }`} style={{
+        background: isDark 
+          ? 'linear-gradient(135deg, rgba(31, 41, 55, 0.4) 0%, rgba(55, 65, 81, 0.3) 100%)'
+          : 'linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(249, 250, 251, 0.3) 100%)'
+      }}>
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             {/* Logo and Title */}
@@ -163,8 +167,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onShowSett
               </div>
             </div>
 
-            {/* Header Actions */}
-            <div className="flex items-center space-x-2">
+            {/* Desktop Header Actions - Hidden on mobile */}
+            <div className="hidden md:flex items-center space-x-2">
               {/* How TOTP Works Button */}
               <button
                 onClick={() => setShowEducationModal(true)}
@@ -207,7 +211,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onShowSett
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-6">
+      <main className="max-w-4xl mx-auto px-4 py-6 pb-24 md:pb-6">
         {/* Cache Status Bar */}
         <div className="mb-4 flex justify-center">
           <CacheStatus />
@@ -381,6 +385,77 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onShowSett
 
       {/* Offline Indicator */}
       <OfflineIndicator />
+
+      {/* Mobile Bottom Navigation - Only shown on mobile */}
+      <nav className={`md:hidden fixed bottom-4 left-4 right-4 z-40 border backdrop-blur-xl backdrop-saturate-150 rounded-2xl ${
+        isDark 
+          ? 'border-gray-700/30 shadow-2xl shadow-black/30' 
+          : 'border-gray-200/30 shadow-xl shadow-gray-900/20'
+      }`} style={{
+        background: isDark 
+          ? 'linear-gradient(135deg, rgba(31, 41, 55, 0.5) 0%, rgba(55, 65, 81, 0.4) 100%)'
+          : 'linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(249, 250, 251, 0.4) 100%)'
+      }}>
+        <div className="flex items-center justify-around px-2 py-3">
+          {/* Learn Button */}
+          <button
+            onClick={() => setShowEducationModal(true)}
+            className={`flex flex-col items-center p-3 rounded-xl transition-all duration-300 hover:scale-105 min-w-[64px] ${
+              isDark 
+                ? 'text-gray-300 hover:text-white hover:bg-white/10 hover:backdrop-blur-sm' 
+                : 'text-gray-600 hover:text-gray-900 hover:bg-black/10 hover:backdrop-blur-sm'
+            }`}
+            title="Learn how TOTP works"
+          >
+            <BookOpen className="w-5 h-5 mb-1" />
+            <span className="text-xs font-semibold">Learn</span>
+          </button>
+
+          {/* Developer Mode */}
+          <button
+            onClick={toggleDeveloperMode}
+            className={`flex flex-col items-center p-3 rounded-xl transition-all duration-300 hover:scale-105 min-w-[64px] ${
+              developerMode 
+                ? 'bg-red-500/20 backdrop-blur-sm text-red-400 border border-red-400/30' 
+                : isDark
+                ? 'text-gray-300 hover:text-white hover:bg-white/10 hover:backdrop-blur-sm'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-black/10 hover:backdrop-blur-sm'
+            }`}
+            title={developerMode ? 'Developer Mode Active' : 'Enable Developer Mode'}
+          >
+            <Code className="w-5 h-5 mb-1" />
+            <span className="text-xs font-semibold">Developer</span>
+          </button>
+          
+          {/* Settings */}
+          <button 
+            onClick={onShowSettings}
+            className={`flex flex-col items-center p-3 rounded-xl transition-all duration-300 hover:scale-105 min-w-[64px] ${
+              isDark 
+                ? 'text-gray-300 hover:text-white hover:bg-white/10 hover:backdrop-blur-sm' 
+                : 'text-gray-600 hover:text-gray-900 hover:bg-black/10 hover:backdrop-blur-sm'
+            }`}
+            title="Settings"
+          >
+            <Settings className="w-5 h-5 mb-1" />
+            <span className="text-xs font-semibold">Settings</span>
+          </button>
+
+          {/* Logout */}
+          <button
+            onClick={onLogout}
+            className={`flex flex-col items-center p-3 rounded-xl transition-all duration-300 hover:scale-105 min-w-[64px] ${
+              isDark 
+                ? 'text-gray-300 hover:text-red-400 hover:bg-red-500/10 hover:backdrop-blur-sm' 
+                : 'text-gray-600 hover:text-red-500 hover:bg-red-500/10 hover:backdrop-blur-sm'
+            }`}
+            title="Sign out"
+          >
+            <LogOut className="w-5 h-5 mb-1" />
+            <span className="text-xs font-semibold">Logout</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 };

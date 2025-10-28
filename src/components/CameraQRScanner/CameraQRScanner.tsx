@@ -17,61 +17,177 @@ export const CameraQRScanner: React.FC<CameraQRScannerProps> = ({ onScan, onClos
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string>('');
+  const [permissionDenied, setPermissionDenied] = useState(false);
 
   useEffect(() => {
-    if (isOpen && videoRef.current) {
-      initializeScanner();
-    }
+    console.log('CameraQRScanner useEffect triggered - isOpen:', isOpen, 'videoRef:', !!videoRef.current);
+    
+    if (isOpen) {
+      console.log('Scanner should be opening...');
+      // Add a small delay to ensure the video element is ready
+      const timer = setTimeout(() => {
+        if (videoRef.current) {
+          console.log('Video element ready, starting initialization...');
+          initializeScanner();
+        } else {
+          console.error('Video element still not ready after delay');
+          setError('Video element not available. Please try again.');
+        }
+      }, 100);
 
-    return () => {
-      if (qrScannerRef.current) {
-        qrScannerRef.current.stop();
-        qrScannerRef.current.destroy();
-      }
-    };
+      return () => {
+        clearTimeout(timer);
+        console.log('CameraQRScanner closing, cleaning up...');
+        if (qrScannerRef.current) {
+          qrScannerRef.current.stop();
+          qrScannerRef.current.destroy();
+          qrScannerRef.current = null;
+        }
+      };
+    }
   }, [isOpen]);
 
   const initializeScanner = async () => {
     try {
-      // Check if camera is available
-      const hasCamera = await QrScanner.hasCamera();
-      setHasCamera(hasCamera);
-
-      if (!hasCamera) {
-        setError('No camera found on this device');
+      setError('');
+      setPermissionDenied(false);
+      
+      console.log('=== Starting QR Scanner Initialization ===');
+      
+      // Check if we're on HTTPS or localhost
+      const isSecureContext = window.isSecureContext;
+      console.log('Secure context:', isSecureContext);
+      
+      if (!isSecureContext && !window.location.hostname.includes('localhost')) {
+        console.error('Not in secure context');
+        setError('Camera access requires HTTPS. Please use a secure connection.');
         return;
       }
 
-      // Get available cameras
-      const cameras = await QrScanner.listCameras(true);
-      setCameras(cameras);
+      // Check if getUserMedia is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('getUserMedia not supported');
+        setError('Camera API not supported in this browser.');
+        return;
+      }
+
+      console.log('Basic camera API checks passed, testing direct camera access...');
+
+      // Test direct camera access first
+      let cameraStream: MediaStream | null = null;
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          } 
+        });
+        console.log('✅ Direct camera access successful');
+        
+        // Stop the test stream
+        cameraStream.getTracks().forEach(track => track.stop());
+      } catch (directError: any) {
+        console.error('❌ Direct camera access failed:', directError);
+        setError(`Camera access failed: ${directError.message}`);
+        setPermissionDenied(true);
+        return;
+      }
+
+      // Now try QrScanner
+      console.log('Testing QrScanner library...');
+      
+      let hasCamera = false;
+      try {
+        hasCamera = await QrScanner.hasCamera();
+        console.log('QrScanner.hasCamera():', hasCamera);
+      } catch (qrError: any) {
+        console.error('QrScanner.hasCamera() failed:', qrError);
+        // Try to continue anyway
+        hasCamera = true;
+        console.log('Assuming camera is available despite QrScanner error');
+      }
+
+      setHasCamera(hasCamera);
+
+      if (!hasCamera) {
+        console.error('No camera detected by QrScanner');
+        setError('No camera found for QR scanning');
+        return;
+      }
+
+      // Get available cameras with better error handling
+      let cameras: QrScanner.Camera[] = [];
+      try {
+        cameras = await QrScanner.listCameras(true);
+        console.log('Available cameras for QR scanning:', cameras);
+        setCameras(cameras);
+      } catch (listError: any) {
+        console.error('Failed to list cameras:', listError);
+        console.log('Continuing with default camera setup...');
+        cameras = [];
+        setCameras([]);
+      }
       
       // Prefer back camera for QR scanning
-      const backCamera = cameras.find(camera => camera.label.toLowerCase().includes('back')) || cameras[0];
-      setSelectedCamera(backCamera);
+      const backCamera = cameras.find(camera => 
+        camera.label.toLowerCase().includes('back') || 
+        camera.label.toLowerCase().includes('rear')
+      ) || cameras[0];
+      
+      if (backCamera) {
+        setSelectedCamera(backCamera);
+        console.log('Selected camera:', backCamera);
+      } else {
+        console.log('No specific camera selected, using default');
+      }
 
       if (videoRef.current) {
-        qrScannerRef.current = new QrScanner(
-          videoRef.current,
-          (result) => {
-            onScan(result.data);
-            stopScanning();
-          },
-          {
-            returnDetailedScanResult: true,
-            highlightScanRegion: true,
-            highlightCodeOutline: true,
-            preferredCamera: backCamera?.id,
-          }
-        );
+        try {
+          console.log('Creating QrScanner instance...');
+          // Create QR scanner with more permissive options
+          qrScannerRef.current = new QrScanner(
+            videoRef.current,
+            (result) => {
+              console.log('QR Code detected:', result.data);
+              onScan(result.data);
+              stopScanning();
+            },
+            {
+              returnDetailedScanResult: true,
+              highlightScanRegion: true,
+              highlightCodeOutline: true,
+              preferredCamera: backCamera?.id || 'environment',
+              maxScansPerSecond: 5,
+            }
+          );
 
-        await qrScannerRef.current.start();
-        setScanning(true);
-        setError('');
+          console.log('Starting QR Scanner...');
+          await qrScannerRef.current.start();
+          setScanning(true);
+          setError('');
+          console.log('✅ QR Scanner started successfully');
+        } catch (startError: any) {
+          console.error('❌ Failed to start QR Scanner:', startError);
+          setError(`QR Scanner failed to start: ${startError.message}`);
+          
+          // Clean up if start failed
+          if (qrScannerRef.current) {
+            try {
+              qrScannerRef.current.destroy();
+            } catch (e) {
+              console.error('Error destroying scanner:', e);
+            }
+            qrScannerRef.current = null;
+          }
+        }
+      } else {
+        console.error('Video element not available');
+        setError('Video element not ready');
       }
-    } catch (error) {
-      console.error('Failed to initialize QR scanner:', error);
-      setError('Failed to access camera. Please check permissions.');
+    } catch (error: any) {
+      console.error('❌ Failed to initialize QR scanner:', error);
+      setError(`Failed to initialize QR scanner: ${error.message}`);
     }
   };
 
@@ -114,7 +230,15 @@ export const CameraQRScanner: React.FC<CameraQRScannerProps> = ({ onScan, onClos
 
   const handleClose = () => {
     stopScanning();
+    setPermissionDenied(false);
+    setError('');
     onClose();
+  };
+
+  const requestPermissionAgain = async () => {
+    setPermissionDenied(false);
+    setError('');
+    await initializeScanner();
   };
 
   if (!isOpen) return null;
@@ -142,6 +266,7 @@ export const CameraQRScanner: React.FC<CameraQRScannerProps> = ({ onScan, onClos
               autoPlay
               playsInline
               muted
+              style={{ display: 'block' }}
             />
             
             {/* Scan Overlay */}
@@ -159,18 +284,49 @@ export const CameraQRScanner: React.FC<CameraQRScannerProps> = ({ onScan, onClos
             )}
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-white">
-            <div className="text-center">
+          <div className="flex-1 flex items-center justify-center text-white p-6">
+            <div className="text-center max-w-sm">
               <Camera className="w-16 h-16 mx-auto mb-4 text-gray-400" />
               <p className="text-lg mb-2">
                 {error || 'Camera not available'}
               </p>
-              <p className="text-sm text-gray-300">
-                Please check camera permissions and try again
+              <p className="text-sm text-gray-300 mb-6">
+                {permissionDenied 
+                  ? 'Camera access is required to scan QR codes. Please allow camera permission in your browser settings.'
+                  : 'Please check camera permissions and try again'
+                }
               </p>
+              
+              {(permissionDenied || error.includes('Video element')) && (
+                <div className="space-y-3">
+                  <button
+                    onClick={requestPermissionAgain}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors font-semibold"
+                  >
+                    Try Again
+                  </button>
+                  <div className="text-xs text-gray-400">
+                    <p>If camera issues persist:</p>
+                    <p>1. Refresh the page completely</p>
+                    <p>2. Check camera permissions in browser settings</p>
+                    <p>3. Make sure no other apps are using the camera</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
+        
+        {/* Always render video element, even if hidden */}
+        {!hasCamera || error ? (
+          <video
+            ref={videoRef}
+            className="hidden"
+            autoPlay
+            playsInline
+            muted
+          />
+        ) : null}
       </div>
 
       {/* Controls */}

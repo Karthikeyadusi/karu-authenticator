@@ -33,8 +33,21 @@ export const PWAUpdateNotification: React.FC = () => {
   }, []);
 
   const handleUpdate = () => {
+    console.log('Update button clicked');
+    console.log('Registration:', registration);
+    console.log('Waiting worker:', registration?.waiting);
+    
     if (registration && registration.waiting) {
+      console.log('Sending SKIP_WAITING message to service worker');
       registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      
+      // Listen for controllerchange to reload
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('Service worker controller changed, reloading...');
+        window.location.reload();
+      });
+    } else {
+      console.log('No waiting service worker, forcing reload');
       window.location.reload();
     }
   };

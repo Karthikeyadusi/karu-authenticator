@@ -6,10 +6,66 @@ interface LandingPageProps {
   onGetStarted: () => void;
 }
 
+// Custom hook for scroll animations
+const useScrollAnimation = () => {
+  const [visibleElements, setVisibleElements] = useState<Set<string>>(new Set());
+  
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.target.id) {
+            console.log('Element visible:', entry.target.id); // Debug log
+            setVisibleElements(prev => new Set([...prev, entry.target.id]));
+          }
+        });
+      },
+      {
+        threshold: 0.2,
+        rootMargin: '0px 0px -100px 0px'
+      }
+    );
+
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      const elements = document.querySelectorAll('[data-animate]');
+      console.log('Found elements to animate:', elements.length); // Debug log
+      elements.forEach((el) => observer.observe(el));
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, []);
+
+  return visibleElements;
+};
+
 export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
   const { theme, setTheme, isDark } = useTheme();
   const [showThemeDropdown, setShowThemeDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const visibleElements = useScrollAnimation();
+
+  // Animation helper function
+  const getAnimationClass = (elementId: string, delay: number = 0) => {
+    const isVisible = visibleElements.has(elementId);
+    console.log(`Element ${elementId} visibility:`, isVisible); // Debug log
+    
+    const delayClass = delay === 100 ? 'delay-100' : 
+                      delay === 200 ? 'delay-200' : 
+                      delay === 300 ? 'delay-300' : 
+                      delay === 500 ? 'delay-500' : '';
+    
+    if (!isVisible) {
+      // Start hidden
+      return `transform transition-all duration-700 ease-out ${delayClass} translate-y-12 opacity-0`;
+    } else {
+      // Animate to visible
+      return `transform transition-all duration-700 ease-out ${delayClass} translate-y-0 opacity-100`;
+    }
+  };
 
   const themeOptions = [
     { value: 'light', icon: Sun, label: 'Light Mode' },
@@ -123,26 +179,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative px-6 py-20">
-        <div className="max-w-7xl mx-auto text-center">
-          <div className="max-w-3xl mx-auto">
-            <h1 className={`text-5xl md:text-6xl font-bold mb-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+      <section className="relative px-6 py-20 min-h-screen flex items-center">
+        <div className="max-w-7xl mx-auto text-center w-full">
+          <div className="max-w-4xl mx-auto">
+            <h1 className={`text-6xl md:text-7xl font-bold mb-8 leading-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
               Secure Your Digital Life with
               <span className={`${isDark ? 'text-blue-400' : 'text-blue-600'}`}> Two-Factor Authentication</span>
             </h1>
-            <p className={`text-xl mb-8 leading-relaxed ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+            <p className={`text-xl md:text-2xl mb-10 leading-relaxed ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
               Generate secure TOTP codes for all your accounts. Fast, reliable, and works offline.
               Your security is our priority.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-5 justify-center">
               <button
                 onClick={onGetStarted}
-                className="bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold hover:bg-blue-700 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2"
+                className="bg-blue-600 text-white px-10 py-5 text-lg rounded-xl font-semibold hover:bg-blue-700 transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-3"
               >
                 <span>Start Securing Now</span>
                 <ArrowRight className="w-5 h-5" />
               </button>
-              <button className={`border-2 px-8 py-4 rounded-xl font-semibold transition-colors flex items-center justify-center space-x-2 ${
+              <button className={`border-2 px-10 py-5 text-lg rounded-xl font-semibold transition-colors flex items-center justify-center space-x-3 ${
                 isDark 
                   ? 'border-gray-600 text-gray-300 hover:border-gray-500 hover:text-white' 
                   : 'border-gray-300 text-gray-700 hover:border-gray-400'
@@ -172,7 +228,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       {/* Features Section */}
       <section id="features" className={`px-6 py-20 ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
+          <div 
+            className={`text-center mb-16 ${getAnimationClass('features-title')}`}
+            id="features-title"
+            data-animate
+          >
             <h2 className={`text-4xl font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
               Why Choose Karu Authenticator?
             </h2>
@@ -182,11 +242,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            <div className={`text-center p-8 rounded-2xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl hover:-translate-y-2 ${
-              isDark 
-                ? 'bg-blue-900/20 border-blue-800 hover:bg-blue-900/30' 
-                : 'bg-blue-50 border-blue-100 hover:bg-blue-100'
-            }`}>
+            <div 
+              className={`text-center p-8 rounded-2xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl hover:-translate-y-2 ${getAnimationClass('feature-1', 100)} ${
+                isDark 
+                  ? 'bg-blue-900/20 border-blue-800 hover:bg-blue-900/30' 
+                  : 'bg-blue-50 border-blue-100 hover:bg-blue-100'
+              }`}
+              id="feature-1"
+              data-animate
+            >
               <div className="bg-blue-600 rounded-full p-4 w-16 h-16 mx-auto mb-6 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
                 <Smartphone className="w-8 h-8 text-white" />
               </div>
@@ -198,11 +262,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               </p>
             </div>
 
-            <div className={`text-center p-8 rounded-2xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl hover:-translate-y-2 ${
-              isDark 
-                ? 'bg-green-900/20 border-green-800 hover:bg-green-900/30' 
-                : 'bg-green-50 border-green-100 hover:bg-green-100'
-            }`}>
+            <div 
+              className={`text-center p-8 rounded-2xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl hover:-translate-y-2 ${getAnimationClass('feature-2', 200)} ${
+                isDark 
+                  ? 'bg-green-900/20 border-green-800 hover:bg-green-900/30' 
+                  : 'bg-green-50 border-green-100 hover:bg-green-100'
+              }`}
+              id="feature-2"
+              data-animate
+            >
               <div className="bg-green-600 rounded-full p-4 w-16 h-16 mx-auto mb-6 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
                 <Zap className="w-8 h-8 text-white" />
               </div>
@@ -214,11 +282,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               </p>
             </div>
 
-            <div className={`text-center p-8 rounded-2xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl hover:-translate-y-2 ${
-              isDark 
-                ? 'bg-purple-900/20 border-purple-800 hover:bg-purple-900/30' 
-                : 'bg-purple-50 border-purple-100 hover:bg-purple-100'
-            }`}>
+            <div 
+              className={`text-center p-8 rounded-2xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl hover:-translate-y-2 ${getAnimationClass('feature-3', 300)} ${
+                isDark 
+                  ? 'bg-purple-900/20 border-purple-800 hover:bg-purple-900/30' 
+                  : 'bg-purple-50 border-purple-100 hover:bg-purple-100'
+              }`}
+              id="feature-3"
+              data-animate
+            >
               <div className="bg-purple-600 rounded-full p-4 w-16 h-16 mx-auto mb-6 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
                 <Shield className="w-8 h-8 text-white" />
               </div>
@@ -236,13 +308,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       {/* Security Section */}
       <section id="security" className="px-6 py-20 bg-gray-900 text-white">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
+          <div 
+            className={`text-center mb-16 ${getAnimationClass('security-title')}`}
+            id="security-title"
+            data-animate
+          >
             <h2 className="text-4xl font-bold mb-4">Enterprise-Grade Security</h2>
             <p className="text-xl text-gray-300">Your data never leaves your device</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div>
+            <div 
+              className={getAnimationClass('security-features', 100)}
+              id="security-features"
+              data-animate
+            >
               <h3 className="text-2xl font-bold mb-6">Built for Privacy</h3>
               <ul className="space-y-4">
                 <li className="flex items-start space-x-3">
@@ -271,7 +351,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 </li>
               </ul>
             </div>
-            <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700">
+            <div 
+              className={`bg-gray-800 rounded-2xl p-8 border border-gray-700 ${getAnimationClass('security-card', 200)}`}
+              id="security-card"
+              data-animate
+            >
               <div className="text-center">
                 <Lock className="w-16 h-16 text-blue-400 mx-auto mb-4" />
                 <h4 className="text-xl font-bold mb-2">Zero Trust Architecture</h4>
@@ -284,7 +368,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
       {/* CTA Section */}
       <section id="download" className="px-6 py-20 bg-blue-600 text-white">
-        <div className="max-w-4xl mx-auto text-center">
+        <div 
+          className={`max-w-4xl mx-auto text-center ${getAnimationClass('cta-section')}`}
+          id="cta-section"
+          data-animate
+        >
           <h2 className="text-4xl font-bold mb-4">Ready to Secure Your Accounts?</h2>
           <p className="text-xl text-blue-100 mb-8">Join thousands of users who trust Karu Authenticator</p>
           

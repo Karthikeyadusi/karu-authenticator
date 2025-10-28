@@ -4,10 +4,19 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    headers: {
+      'Service-Worker-Allowed': '/',
+    },
+  },
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: {
+        enabled: true,
+        type: 'module'
+      },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         // Cache everything for offline-first experience
@@ -82,9 +91,6 @@ export default defineConfig({
           }
         ],
         categories: ['productivity', 'security', 'utilities']
-      },
-      devOptions: {
-        enabled: true
       }
     })
   ]
