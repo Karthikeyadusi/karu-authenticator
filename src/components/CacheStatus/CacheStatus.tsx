@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive, Wifi, WifiOff } from 'lucide-react';
+import { Wifi, WifiOff } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { CacheService } from '../../services/cache';
 
