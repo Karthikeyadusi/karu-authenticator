@@ -61,12 +61,6 @@ export const OTPCard: React.FC<OTPCardProps> = ({ account, onEdit, onDelete, dev
     return 'bg-green-500';
   };
 
-  const getTimeColor = () => {
-    if (otpDisplay.timeRemaining <= 5) return isDark ? 'text-red-400' : 'text-red-600';
-    if (otpDisplay.timeRemaining <= 10) return isDark ? 'text-yellow-400' : 'text-yellow-600';
-    return isDark ? 'text-green-400' : 'text-green-600';
-  };
-
   return (
     <div 
       ref={swipeGesture.ref}
