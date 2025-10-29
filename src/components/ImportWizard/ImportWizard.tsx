@@ -35,11 +35,11 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
     try {
       console.log('🔍 Parsing URI:', uri);
       console.log('📝 URI type analysis:');
-      console.log('  - Starts with otpauth-migration:', uri.startsWith('otpauth-migration://offline?data='));
+      console.log('  - Starts with otpauth-migration:', uri.startsWith('otpauth-migration://'));
       console.log('  - Starts with otpauth:', uri.startsWith('otpauth://'));
       
       // Check if it's a Google Authenticator migration URI
-      if (uri.startsWith('otpauth-migration://offline?data=')) {
+      if (uri.startsWith('otpauth-migration://')) {
         console.log('🔄 Detected Google Authenticator migration URI');
         return parseGoogleMigrationData(uri);
       }
@@ -77,23 +77,274 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
   // Parse Google Authenticator migration data
   const parseGoogleMigrationData = (uri: string): ParsedAccount[] => {
     try {
+      console.log('🔄 Starting Google migration parsing for URI:', uri);
+      
       const url = new URL(uri);
+      console.log('📊 URL parsed. Pathname:', url.pathname, 'Search params:', url.search);
+      
       const data = url.searchParams.get('data');
+      console.log('📦 Migration data parameter:', data ? `${data.length} characters` : 'Not found');
       
       if (!data) {
         throw new Error('No migration data found in QR code');
       }
       
-      // Decode base64 data (Protocol Buffers parsing would go here)
-      // const decodedData = atob(data);
+      console.log('🔧 Decoding base64 migration data...');
+      // Decode base64 data
+      const decodedData = atob(data);
+      console.log('✅ Base64 decoded, length:', decodedData.length);
       
-      // This is a simplified parser - in reality, Google uses Protocol Buffers
-      // For now, we'll show a placeholder implementation
-      throw new Error('Google Authenticator migration format parsing is not yet implemented. Please use individual account QR codes or manual entry.');
+      // Convert to Uint8Array for parsing
+      const bytes = new Uint8Array(decodedData.length);
+      for (let i = 0; i < decodedData.length; i++) {
+        bytes[i] = decodedData.charCodeAt(i);
+      }
+      console.log('🔢 Converted to bytes array, length:', bytes.length);
+      
+      // Parse Protocol Buffers data
+      // This is a simplified parser for Google Authenticator's protobuf format
+      const accounts: ParsedAccount[] = [];
+      let offset = 0;
+      
+      console.log('🔍 Starting protobuf parsing...');
+      while (offset < bytes.length) {
+        console.log(`📍 Parsing at offset ${offset}/${bytes.length}`);
+        const result = parseProtobufMessage(bytes, offset);
+        if (result.account) {
+          console.log('✅ Found account:', { ...result.account, secret: '***' });
+          accounts.push(result.account);
+        }
+        offset = result.nextOffset;
+        
+        // Safety check to prevent infinite loops
+        if (offset >= bytes.length || result.nextOffset <= offset) {
+          console.log('🛑 Reached end of data or invalid offset');
+          break;
+        }
+      }
+      
+      console.log(`🎉 Migration parsing complete. Found ${accounts.length} accounts`);
+      
+      if (accounts.length === 0) {
+        throw new Error('No valid accounts found in migration data');
+      }
+      
+      return accounts;
       
     } catch (error: any) {
+      console.error('❌ Migration parsing error:', error);
       throw new Error(`Failed to parse Google Authenticator export: ${error.message}`);
     }
+  };
+
+  // Simple Protocol Buffers parser for Google Authenticator format
+  const parseProtobufMessage = (bytes: Uint8Array, startOffset: number): { account: ParsedAccount | null, nextOffset: number } => {
+    let offset = startOffset;
+    let account: Partial<ParsedAccount> = {};
+    
+    console.log(`🔧 Parsing protobuf message starting at offset ${startOffset}`);
+    
+    try {
+      while (offset < bytes.length) {
+        // Read field number and wire type
+        const fieldHeader = readVarint(bytes, offset);
+        if (!fieldHeader) {
+          console.log('❌ Failed to read field header, ending parse');
+          break;
+        }
+        
+        offset = fieldHeader.nextOffset;
+        const fieldNumber = fieldHeader.value >>> 3;
+        const wireType = fieldHeader.value & 0x7;
+        
+        console.log(`📋 Field ${fieldNumber}, wire type ${wireType} at offset ${offset - 1}`);
+        
+        switch (fieldNumber) {
+          case 1: // secret (bytes)
+            if (wireType === 2) { // Length-delimited
+              const length = readVarint(bytes, offset);
+              if (length) {
+                offset = length.nextOffset;
+                const secretBytes = bytes.slice(offset, offset + length.value);
+                account.secret = base32Encode(secretBytes);
+                console.log(`🔑 Found secret (${length.value} bytes)`);
+                offset += length.value;
+              }
+            }
+            break;
+            
+          case 2: // name/label (string)
+            if (wireType === 2) {
+              const length = readVarint(bytes, offset);
+              if (length) {
+                offset = length.nextOffset;
+                const nameBytes = bytes.slice(offset, offset + length.value);
+                const fullName = new TextDecoder().decode(nameBytes);
+                
+                console.log(`🏷️ Found name: ${fullName}`);
+                
+                // Parse issuer:account format
+                const parts = fullName.split(':');
+                if (parts.length >= 2) {
+                  account.issuer = parts[0].trim();
+                  account.accountIdentifier = parts.slice(1).join(':').trim();
+                } else {
+                  account.issuer = fullName.trim() || 'Unknown';
+                  account.accountIdentifier = '';
+                }
+                offset += length.value;
+              }
+            }
+            break;
+            
+          case 3: // issuer (string)
+            if (wireType === 2) {
+              const length = readVarint(bytes, offset);
+              if (length) {
+                offset = length.nextOffset;
+                const issuerBytes = bytes.slice(offset, offset + length.value);
+                const issuer = new TextDecoder().decode(issuerBytes);
+                console.log(`🏢 Found issuer: ${issuer}`);
+                if (issuer.trim()) {
+                  account.issuer = issuer.trim();
+                }
+                offset += length.value;
+              }
+            }
+            break;
+            
+          case 4: // algorithm (enum)
+            if (wireType === 0) { // Varint
+              const algorithm = readVarint(bytes, offset);
+              if (algorithm) {
+                offset = algorithm.nextOffset;
+                switch (algorithm.value) {
+                  case 1: account.algorithm = 'SHA1'; break;
+                  case 2: account.algorithm = 'SHA256'; break;
+                  case 3: account.algorithm = 'SHA512'; break;
+                  default: account.algorithm = 'SHA1';
+                }
+                console.log(`🔐 Found algorithm: ${account.algorithm}`);
+              }
+            }
+            break;
+            
+          case 5: // digits (int32)
+            if (wireType === 0) {
+              const digits = readVarint(bytes, offset);
+              if (digits) {
+                offset = digits.nextOffset;
+                account.digits = digits.value;
+                console.log(`🔢 Found digits: ${account.digits}`);
+              }
+            }
+            break;
+            
+          case 6: // type (enum)
+            if (wireType === 0) {
+              const type = readVarint(bytes, offset);
+              if (type) {
+                offset = type.nextOffset;
+                account.type = type.value === 1 ? 'HOTP' : 'TOTP';
+                console.log(`📱 Found type: ${account.type}`);
+              }
+            }
+            break;
+            
+          default:
+            // Skip unknown fields
+            console.log(`⏭️ Skipping unknown field ${fieldNumber}`);
+            offset = skipField(bytes, offset, wireType);
+            break;
+        }
+        
+        // Check if we have a complete account
+        if (account.secret && account.issuer) {
+          const completeAccount = {
+            issuer: account.issuer,
+            accountIdentifier: account.accountIdentifier || '',
+            secret: account.secret,
+            algorithm: account.algorithm || 'SHA1',
+            digits: account.digits || 6,
+            period: 30, // Google Authenticator uses 30 seconds
+            type: account.type || 'TOTP'
+          };
+          
+          console.log('✅ Complete account found:', { ...completeAccount, secret: '***' });
+          
+          return {
+            account: completeAccount,
+            nextOffset: offset
+          };
+        }
+      }
+    } catch (error) {
+      console.error('❌ Protobuf parsing error:', error);
+    }
+    
+    console.log('❌ No complete account found in this message');
+    return { account: null, nextOffset: bytes.length };
+  };
+
+  // Helper functions for Protocol Buffers parsing
+  const readVarint = (bytes: Uint8Array, offset: number): { value: number, nextOffset: number } | null => {
+    let result = 0;
+    let shift = 0;
+    let currentOffset = offset;
+    
+    while (currentOffset < bytes.length) {
+      const byte = bytes[currentOffset++];
+      result |= (byte & 0x7F) << shift;
+      
+      if ((byte & 0x80) === 0) {
+        return { value: result, nextOffset: currentOffset };
+      }
+      
+      shift += 7;
+      if (shift >= 32) break; // Prevent overflow
+    }
+    
+    return null;
+  };
+
+  const skipField = (bytes: Uint8Array, offset: number, wireType: number): number => {
+    switch (wireType) {
+      case 0: // Varint
+        const varint = readVarint(bytes, offset);
+        return varint ? varint.nextOffset : offset + 1;
+      case 1: // 64-bit
+        return offset + 8;
+      case 2: // Length-delimited
+        const length = readVarint(bytes, offset);
+        return length ? length.nextOffset + length.value : offset + 1;
+      case 5: // 32-bit
+        return offset + 4;
+      default:
+        return offset + 1;
+    }
+  };
+
+  const base32Encode = (bytes: Uint8Array): string => {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let result = '';
+    let buffer = 0;
+    let bitsLeft = 0;
+    
+    for (const byte of bytes) {
+      buffer = (buffer << 8) | byte;
+      bitsLeft += 8;
+      
+      while (bitsLeft >= 5) {
+        result += alphabet[(buffer >>> (bitsLeft - 5)) & 31];
+        bitsLeft -= 5;
+      }
+    }
+    
+    if (bitsLeft > 0) {
+      result += alphabet[(buffer << (5 - bitsLeft)) & 31];
+    }
+    
+    return result;
   };
 
   // Parse individual otpauth URI
