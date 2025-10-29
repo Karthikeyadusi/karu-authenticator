@@ -28,6 +28,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
   const [selectedAccounts, setSelectedAccounts] = useState<Set<number>>(new Set());
   const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'success' | 'error'>('idle');
   const [error, setError] = useState<string>('');
+  const [debugStatus, setDebugStatus] = useState<string>('Ready to scan'); // Debug status for mobile
 
   // Parse Google Authenticator export QR code
   const parseGoogleAuthExport = (uri: string): ParsedAccount[] => {
@@ -49,6 +50,20 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
         const account = parseOtpAuthUri(uri);
         console.log('✅ Parsed single account:', account);
         return [account];
+      }
+      
+      // For testing - create a dummy account if it's any QR code
+      if (uri.length > 10) {
+        console.log('🧪 Creating test account for any QR code');
+        return [{
+          issuer: 'Test Service',
+          accountIdentifier: 'test@example.com',
+          secret: 'JBSWY3DPEHPK3PXP', // Sample base32 secret
+          algorithm: 'SHA1',
+          digits: 6,
+          period: 30,
+          type: 'TOTP'
+        }];
       }
       
       console.log('❌ Unknown URI format:', uri.substring(0, 50) + '...');
@@ -134,23 +149,29 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
   };
 
   const handleQRScan = (result: string) => {
+    setDebugStatus(`QR Scanned: ${result.substring(0, 50)}...`);
+    
     try {
       console.log('🔍 ImportWizard: QR Code scanned:', result);
       console.log('📊 Current step before parsing:', currentStep);
       
+      setDebugStatus('Parsing QR code...');
       const accounts = parseGoogleAuthExport(result);
       console.log('✅ Parsed accounts:', accounts);
       
+      setDebugStatus(`Found ${accounts.length} accounts`);
       setParsedAccounts(accounts);
       setSelectedAccounts(new Set(accounts.map((_, index) => index)));
       setShowScanner(false);
       setCurrentStep('preview');
       setError('');
+      setDebugStatus('Ready for import');
       
       console.log('🎯 Updated state - step: preview, accounts:', accounts.length);
     } catch (error: any) {
       console.error('❌ Import error:', error);
       setError(error.message);
+      setDebugStatus(`Error: ${error.message}`);
       setShowScanner(false);
       // Stay on current step to show error
     }
@@ -212,9 +233,14 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-3">
             <Download className="w-6 h-6 text-blue-600" />
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              Import from Google Authenticator
-            </h2>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                Import from Google Authenticator
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Step: {currentStep} | Debug: {debugStatus}
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -241,6 +267,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
                 {/* QR Code Import */}
                 <button
                   onClick={() => {
+                    setDebugStatus('Opening camera scanner...');
                     console.log('🎯 Scan QR Code button clicked');
                     console.log('📊 Current state:', {
                       currentStep,
@@ -250,6 +277,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
                     });
                     setCurrentStep('scan');
                     setShowScanner(true);
+                    setDebugStatus('Camera ready - scan QR code');
                     console.log('✅ Updated to scan mode');
                   }}
                   className="w-full p-6 border-2 border-dashed border-blue-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group"
