@@ -32,21 +32,29 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
   // Parse Google Authenticator export QR code
   const parseGoogleAuthExport = (uri: string): ParsedAccount[] => {
     try {
-      console.log('Parsing URI:', uri);
+      console.log('🔍 Parsing URI:', uri);
+      console.log('📝 URI type analysis:');
+      console.log('  - Starts with otpauth-migration:', uri.startsWith('otpauth-migration://offline?data='));
+      console.log('  - Starts with otpauth:', uri.startsWith('otpauth://'));
       
       // Check if it's a Google Authenticator migration URI
       if (uri.startsWith('otpauth-migration://offline?data=')) {
+        console.log('🔄 Detected Google Authenticator migration URI');
         return parseGoogleMigrationData(uri);
       }
       
       // Check if it's a regular otpauth URI
       if (uri.startsWith('otpauth://')) {
-        return [parseOtpAuthUri(uri)];
+        console.log('🔑 Detected regular otpauth URI');
+        const account = parseOtpAuthUri(uri);
+        console.log('✅ Parsed single account:', account);
+        return [account];
       }
       
-      throw new Error('Invalid QR code format. Please scan a Google Authenticator export QR code.');
+      console.log('❌ Unknown URI format:', uri.substring(0, 50) + '...');
+      throw new Error('Invalid QR code format. Please scan a Google Authenticator export QR code or individual account QR code.');
     } catch (error: any) {
-      console.error('Error parsing QR code:', error);
+      console.error('❌ Error parsing QR code:', error);
       throw error;
     }
   };
@@ -75,8 +83,18 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
 
   // Parse individual otpauth URI
   const parseOtpAuthUri = (uri: string): ParsedAccount => {
+    console.log('🔑 Parsing individual otpauth URI:', uri);
+    
     const url = new URL(uri);
+    console.log('📊 URL parts:', {
+      protocol: url.protocol,
+      hostname: url.hostname,
+      pathname: url.pathname,
+      searchParams: Object.fromEntries(url.searchParams.entries())
+    });
+    
     const pathParts = url.pathname.substring(1).split(':');
+    console.log('📂 Path parts:', pathParts);
     
     const type = url.hostname; // totp or hotp
     const issuer = pathParts[0] || 'Unknown';
@@ -87,11 +105,21 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
     const digits = parseInt(url.searchParams.get('digits') || '6');
     const period = parseInt(url.searchParams.get('period') || '30');
     
+    console.log('📋 Parsed values:', {
+      type,
+      issuer,
+      accountIdentifier,
+      secret: secret ? `${secret.substring(0, 8)}...` : 'null',
+      algorithm,
+      digits,
+      period
+    });
+    
     if (!secret) {
       throw new Error('No secret found in QR code');
     }
     
-    return {
+    const account = {
       issuer,
       accountIdentifier,
       secret,
@@ -100,21 +128,31 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
       period,
       type: type.toUpperCase()
     };
+    
+    console.log('✅ Final parsed account:', { ...account, secret: '***' });
+    return account;
   };
 
   const handleQRScan = (result: string) => {
     try {
-      console.log('QR Code scanned:', result);
+      console.log('🔍 ImportWizard: QR Code scanned:', result);
+      console.log('📊 Current step before parsing:', currentStep);
+      
       const accounts = parseGoogleAuthExport(result);
+      console.log('✅ Parsed accounts:', accounts);
+      
       setParsedAccounts(accounts);
       setSelectedAccounts(new Set(accounts.map((_, index) => index)));
       setShowScanner(false);
       setCurrentStep('preview');
       setError('');
+      
+      console.log('🎯 Updated state - step: preview, accounts:', accounts.length);
     } catch (error: any) {
-      console.error('Import error:', error);
+      console.error('❌ Import error:', error);
       setError(error.message);
       setShowScanner(false);
+      // Stay on current step to show error
     }
   };
 
@@ -203,8 +241,16 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
                 {/* QR Code Import */}
                 <button
                   onClick={() => {
+                    console.log('🎯 Scan QR Code button clicked');
+                    console.log('📊 Current state:', {
+                      currentStep,
+                      showScanner,
+                      parsedAccounts: parsedAccounts.length,
+                      error
+                    });
                     setCurrentStep('scan');
                     setShowScanner(true);
+                    console.log('✅ Updated to scan mode');
                   }}
                   className="w-full p-6 border-2 border-dashed border-blue-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group"
                 >
@@ -240,6 +286,16 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport, onClose, e
                   </div>
                 </div>
               </div>
+
+              {/* Error display for method step */}
+              {error && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                  <div className="flex space-x-3">
+                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                    <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+                  </div>
+                </div>
+              )}
 
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
                 <div className="flex space-x-3">
