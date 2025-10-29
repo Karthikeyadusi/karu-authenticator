@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, LogOut, Settings, Shield, Code, AlertTriangle, BookOpen } from 'lucide-react';
+import { Plus, Search, LogOut, Settings, Shield, Code, AlertTriangle, BookOpen, Download } from 'lucide-react';
 import { OTPCard } from '../OTPCard/OTPCard';
 import { AddAccountModal } from '../AddAccountModal/AddAccountModal';
+import { ImportWizard } from '../ImportWizard/ImportWizard';
 import { TOTPEducationModal } from '../TOTPEducationModal/TOTPEducationModal';
 import { PWAInstallPrompt } from '../PWAInstallPrompt/PWAInstallPrompt';
 import { PWAUpdateNotification } from '../PWAUpdateNotification/PWAUpdateNotification';
@@ -23,6 +24,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onShowSett
   const [accounts, setAccounts] = useState<AuthAccount[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportWizard, setShowImportWizard] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AuthAccount | null>(null);
   const [developerMode, setDeveloperMode] = useState(false);
   const [showDeveloperWarning, setShowDeveloperWarning] = useState(false);
@@ -70,6 +72,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onShowSett
     authService.storeUserAccounts([...currentAccounts, newAccount]);
     loadAccounts();
     setShowAddModal(false);
+  };
+
+  const handleImportAccounts = (importedAccounts: Omit<AuthAccount, 'id'>[]) => {
+    const currentAccounts = authService.getUserAccounts();
+    const newAccounts = importedAccounts.map((accountData, index) => ({
+      ...accountData,
+      id: (Date.now() + index).toString()
+    }));
+    
+    authService.storeUserAccounts([...currentAccounts, ...newAccounts]);
+    loadAccounts();
+    setShowImportWizard(false);
   };
 
   const handleEditAccount = (account: AuthAccount) => {
@@ -232,13 +246,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onShowSett
           </div>
 
           {/* Add Account Button - Mobile Optimized */}
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 dark:from-blue-400 dark:to-blue-500 dark:hover:from-blue-500 dark:hover:to-blue-600 active:scale-95 text-white py-4 px-6 rounded-xl font-semibold flex items-center justify-center space-x-3 transition-all duration-200 text-lg min-h-[56px] shadow-lg hover:shadow-xl"
-          >
-            <Plus className="w-6 h-6" />
-            <span>Add Account</span>
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 dark:from-blue-400 dark:to-blue-500 dark:hover:from-blue-500 dark:hover:to-blue-600 active:scale-95 text-white py-4 px-6 rounded-xl font-semibold flex items-center justify-center space-x-3 transition-all duration-200 text-lg min-h-[56px] shadow-lg hover:shadow-xl"
+            >
+              <Plus className="w-6 h-6" />
+              <span>Add Account</span>
+            </button>
+            
+            <button
+              onClick={() => setShowImportWizard(true)}
+              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 dark:from-green-400 dark:to-green-500 dark:hover:from-green-500 dark:hover:to-green-600 active:scale-95 text-white py-4 px-6 rounded-xl font-semibold flex items-center justify-center space-x-3 transition-all duration-200 text-lg min-h-[56px] shadow-lg hover:shadow-xl"
+            >
+              <Download className="w-6 h-6" />
+              <span>Import</span>
+            </button>
+          </div>
         </div>
 
         {/* Developer Mode Warning */}
@@ -323,6 +347,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onShowSett
             setShowAddModal(false);
             setEditingAccount(null);
           }}
+        />
+      )}
+
+      {/* Import Wizard Modal */}
+      {showImportWizard && (
+        <ImportWizard
+          onImport={handleImportAccounts}
+          onClose={() => setShowImportWizard(false)}
+          existingAccounts={accounts}
         />
       )}
 
